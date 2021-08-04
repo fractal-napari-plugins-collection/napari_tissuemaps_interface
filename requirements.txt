@@ -1,0 +1,7 @@
+pytest==6.2.3
+pytest-mock==3.6.0
+pylint==2.8.2
+pycodestyle==2.7.0
+coverage==5.5
+sphinx==3.5.4
+-e .
