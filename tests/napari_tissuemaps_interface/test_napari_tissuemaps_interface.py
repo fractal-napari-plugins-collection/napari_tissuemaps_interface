@@ -5,7 +5,7 @@ import numpy as np
 from types import SimpleNamespace
 from PIL import Image
 import io
-
+import os 
 from napari_tissuemaps_interface.napari_tissuemaps_interface import tissuemaps_connector 
 
 EXPERIMENT_ID = 95
@@ -14,6 +14,8 @@ TILE_SIZE = 256
 IMAGE_HEIGHT = 4096
 IMAGE_WIDTH = 6144
 MAX_ZOOM = 4
+
+os.environ["NAPARI_OCTREE"] = "1"
 
 def test_tissuemaps_connector(mocker):
     """
