@@ -12,7 +12,7 @@ import numpy as np
 import requests
 import PIL
 from napari.types import LayerDataTuple
-from qtpy.QtWidgets import QLineEdit
+from qtpy.QtWidgets import QLineEdit # pylint: disable=E0611
 from magicgui.widgets import FunctionGui
 
 from .lazy_array import LazyArray
