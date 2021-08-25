@@ -1,6 +1,5 @@
 """
-Main module containing the reader for multi-scale (pyramidal) TIFF files,
-as well as the napari widget interface
+Main module containing the napari widget for reading from a TissueMAPS interface.
 """
 import os
 from xml.dom import minidom
@@ -13,12 +12,12 @@ import numpy as np
 import requests
 import PIL
 from napari.types import LayerDataTuple
-from qtpy.QtWidgets import QLineEdit  # pylint: disable=E0611
+from qtpy.QtWidgets import QLineEdit
 from magicgui.widgets import FunctionGui
 
-from .lazy_array import LazyArray  # pylint: disable=E0401
+from .lazy_array import LazyArray
 
-TILE_SIZE = 256  # hard-coded in TissueMAPs
+TILE_SIZE = 256  # hard-coded in TissueMAPS
 
 
 def authenticate(url, username, password):
@@ -77,7 +76,7 @@ def get_data(url, api_uri, token, **params):
 def tissuemaps_interface(url, token, experiment_id, channel_layer_id):
     # pylint: disable=R0914
     """
-    Function which reads an image layer from the TissueMAPs API.
+    Function which reads a channel layer from the TissueMAPs API.
     Given NAPARI_OCTREE==1, it returns a multi-scale (pyramidal) image as a delayed Dask
     array. Otherwise, it returns a high-resolution image as numpy array.
     Note: The later will download the full image into memory!
@@ -94,36 +93,31 @@ def tissuemaps_interface(url, token, experiment_id, channel_layer_id):
         """
         A numpy-like array which lazily loads tiles from a TissueMAPS server.
         """
-        # pylint: disable=R0903
         def __init__(self, shape, dtype, tile_size, zoom):
             super().__init__(shape, dtype, tile_size)
             self.zoom = zoom
 
         @dask.delayed
         def read_tile(self, y_tile, x_tile):
-            '''
-            Reads a tile from a TissuMAPS server
-
-            :param y_tile: the y coordinate of the tile
-            :param x_tile: the x coordinate of the tile
-
-            :return: numpy array with the the cooresponding tile updated
-            '''
-            tiles_resp = http_get(
-                url, 'api/experiments/' + str(experiment_id) + '/channel_layers/' +
-                str(channel_layer_id) + '/tiles', token, x=x_tile, y=y_tile, z=self.zoom
+            api_url = (
+                'api/experiments/' + str(experiment_id) + '/channel_layers/' +
+                str(channel_layer_id) + '/tiles'
             )
+            tiles_resp = http_get(url, api_url, token, x=x_tile, y=y_tile, z=self.zoom)
             img = PIL.Image.open(BytesIO(tiles_resp.content))
             data = np.zeros((self.tile_size, self.tile_size))
             data[:img.size[1], :img.size[0]] = np.asarray(img)
             return data
 
-    channel_layers = get_data(url, 'api/experiments/' +
-                              str(experiment_id) + '/channel_layers',
-                              token)
+    channel_layers = get_data(
+        url,
+        'api/experiments/' + str(experiment_id) + '/channel_layers',
+        token
+    )
 
-    channel_layer = next(item for item in channel_layers if item["id"] ==
-                         channel_layer_id)
+    channel_layer = next(
+        item for item in channel_layers if item["id"] == channel_layer_id
+    )
 
     image_data = {}
     image_data['image_height'] = channel_layer['image_size']['height']
@@ -144,7 +138,7 @@ def tissuemaps_interface(url, token, experiment_id, channel_layer_id):
 
         if 'NAPARI_OCTREE' not in os.environ or os.environ['NAPARI_OCTREE'] != '1':
             # given we don't have a spatial index (e.g. an octree), we can
-            # directly return the heighest resolution.
+            # directly return the highest resolution.
             # NOTE: this will download the full image into memory!
             array = np.asarray(array)
             return array
@@ -162,10 +156,9 @@ def tissuemaps_connector(path):
     and return a multi-scale (pyramidal) JPEG from TissueMAPs api as delayed Dask
     array.
 
-    :param path: The path of the image
+    :param path: XML file path
     :return: List of LayerData tuple
     """
-
     xmldoc = minidom.parse(path)
     auth_data = {}
     auth_data['url'] = xmldoc.getElementsByTagName('url')[0].attributes['url'].value
@@ -183,10 +176,13 @@ def tissuemaps_connector(path):
     query_data['channel_layer_id'] = \
         xmldoc.getElementsByTagName('layerdata')[0].attributes['channel_layer_id'].value
 
-    pyramid = tissuemaps_interface(auth_data['url'], auth_data['token'],
-                                   query_data['experiment_id'],  query_data['channel_layer_id'])
+    pyramid = tissuemaps_interface(
+        auth_data['url'],
+        auth_data['token'],
+        query_data['experiment_id'],
+        query_data['channel_layer_id']
+    )
 
-    # kwargs = {}
     return [(pyramid, {})]
 
 
@@ -269,72 +265,59 @@ class TissueMAPSConnectionWidget(FunctionGui):
             param_options={
                 "token": {"widget_type": TissueMAPSGetTokenWidget, "name": "tm_connector"},
                 "experiment_name": {"choices": [""]},
-                "channel_layer": {"choices": [""]},
-                "load_all_channels": {"enabled": True, "text": "Load all channels"},
+                "channel_name": {"choices": [""]},
             },
         )
 
-        def get_experiments(*args):
+        def get_experiment_names(*args):
             # pylint: disable=W0613
-            if len(self.experiments_data) > 0:
-                return [item['name'] for item in self.experiments_data]
+            if len(self.experiments) > 0:
+                return [experiment['name'] for experiment in self.experiments]
+            return []
 
-            return [""]
-
-        def search_id(name):
-            """
-            Function that creates a dictionary of experiments names and thair ids.
-
-            :param token: experiment name
-            :return: the correspondent id
-            """
-            dict_exp = [{'name': item['name'], 'id': item['id']} for item in self.experiments_data]
-            id_exp = next(item for item in dict_exp if item["name"] == name)['id']
-            return id_exp
-
-        def get_channel_layers(*args):
+        def get_channel_names(*args):
             # pylint: disable=W0613
-            if len(self.channel_layer_data) > 0:
-                return self.channel_layer_data
-
-            return[""]
+            channel_names = []
+            if len(self.channels) > 0:
+                channel_names = [channel['name'] for channel in self.channels]
+            if len(channel_names) > 1:
+                channel_names.insert(0, "-- All --")
+            return channel_names
 
         @self.tm_connector.changed.connect
         def update_experiments(event):
             # pylint: disable=W0613
             if self.tm_connector.token != "":
-                resp = get_data(self.tm_connector.url.value, "/api/experiments",
-                                self.tm_connector.token)
-                self.experiments_data = resp
+                resp = get_data(
+                    self.tm_connector.url.value,
+                    "/api/experiments",
+                    self.tm_connector.token
+                )
+                self.experiments = resp
+                self.experiment_name.choices = []
                 self.experiment_name.reset_choices()
 
         @self.experiment_name.changed.connect
-        def update_channel_layer_id(event):
+        def update_channels(event):
             # pylint: disable=W0613
-            id_exp = search_id(self.experiment_name.value)
-            resp = get_data(self.tm_connector.url.value, 'api/experiments/' +
-                            str(id_exp) + '/channel_layers',
-                            self.tm_connector.token)
-            self.channel_layer_data = resp
-            self.channel_layer.reset_choices()
+            exp_id = [
+                exp["id"] for exp in self.experiments if exp["name"] == self.experiment_name.value
+            ][0]
+            resp = get_data(
+                self.tm_connector.url.value,
+                'api/experiments/' + str(exp_id) + '/channels',
+                self.tm_connector.token
+            )
+            self.channels = resp
+            self.channel_name.choices = []
+            self.channel_name.reset_choices()
 
-        self.experiments_data = []
-        self.channel_layer_data = []
-        self.experiment_name._default_choices = get_experiments
-        self.channel_layer._default_choices = get_channel_layers
+        self.experiments = []
+        self.channels = []
+        self.experiment_name._default_choices = get_experiment_names
+        self.channel_name._default_choices = get_channel_names
 
         self.native.layout().addStretch()
-
-    def search_id(self, name):
-        """
-        Function that creates a dictionary of experiments names and thair ids.
-
-        :param token: experiment name
-        :return: the correspondent id
-        """
-        dict_exp = [{'name': item['name'], 'id': item['id']} for item in self.experiments_data]
-        id_exp = next(item for item in dict_exp if item["name"] == name)['id']
-        return id_exp
 
     def __setitem__(self, key, value):
         """Prevent assignment by index."""
@@ -343,8 +326,7 @@ class TissueMAPSConnectionWidget(FunctionGui):
 
     def apply(self, token=("", "", ""),
               experiment_name="",
-              load_all_channels=True,
-              channel_layer="") -> List[LayerDataTuple]:
+              channel_name="") -> List[LayerDataTuple]:
         # pylint: disable=W0613
         """
         Function executed when the "Load Data" button is pressed.
@@ -353,26 +335,56 @@ class TissueMAPSConnectionWidget(FunctionGui):
 
         :param token: The access token for querying TissueMAPS
         :param experiment_name: The name of a TissueMAPS experiment
-        :param load_all_channels: Checkbutton to select all the channels of an experiment
-        :param channel_layer: The channel layer of a TissueMAPS experiment
+        :param channel_name: The channel name of a TissueMAPS experiment
         :return: napari_layers.Image object, with access_token stored as metadata
         """
-        id_exp = TissueMAPSConnectionWidget.search_id(self, experiment_name)
-        if load_all_channels:
+        exp_id = [exp["id"] for exp in self.experiments if exp["name"] == experiment_name][0]
+        if channel_name == '-- All --':
             multi_layer = []
-            for chan_dict in self.channel_layer_data:
-                pyramid = tissuemaps_interface(self.tm_connector.url.value,
-                                               token,
-                                               id_exp, str(chan_dict["id"]))
-                res = (pyramid, {'name': "CL_"+str(chan_dict["id"]),
-                                 'metadata': {'token': self.tm_connector.token}}, 'image')
-                multi_layer.append(res)
-            return multi_layer
-        pyramid = tissuemaps_interface(self.tm_connector.url.value,
-                                       token,
-                                       id_exp, channel_layer['id'])
-        return [(pyramid, {'name': "CL_"+str(channel_layer['id']),
-                           'metadata': {'token': self.tm_connector.token}}, 'image')]
+            for channel in self.channels:
+                assert len(channel["layers"]) == 1
+                for layer in channel["layers"]:
+                    pyramid = tissuemaps_interface(
+                        self.tm_connector.url.value,
+                        token,
+                        exp_id,
+                        str(layer["id"])
+                    )
+                    res = (
+                        pyramid, {
+                            'name': channel['name'],
+                            'metadata': {'token': self.tm_connector.token},
+                            'opacity': 1.0 / len(self.channels),
+                            'blending': 'additive'
+                        },
+                        'image'
+                    )
+                    multi_layer.append(res)
+            return list(
+                reversed(
+                    sorted(multi_layer, key=lambda layer_data: layer_data[1]["name"])
+                )
+            )
+
+        channels = [ch for ch in self.channels if ch["name"] == channel_name]
+        assert len(channels) == 1
+        layer_ids = [layer["id"] for layer in channels[0]["layers"]]
+        assert len(layer_ids) == 1
+        pyramid = tissuemaps_interface(
+            self.tm_connector.url.value,
+            token,
+            exp_id,
+            layer_ids[0]
+        )
+        return [(
+            pyramid,
+            {
+                'name': channel_name,
+                'metadata': {'token': self.tm_connector.token},
+                'blending': 'additive'
+            },
+            'image'
+        )]
 
 
 @napari_hook_implementation
