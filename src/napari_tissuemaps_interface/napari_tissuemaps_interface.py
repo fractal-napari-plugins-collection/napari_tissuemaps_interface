@@ -15,7 +15,7 @@ from napari.types import LayerDataTuple
 from qtpy.QtWidgets import QLineEdit  # pylint: disable=E0611
 from magicgui.widgets import FunctionGui
 
-from .lazy_array import LazyArray
+from .lazy_array import LazyArray  # pylint: disable=E0401
 
 TILE_SIZE = 256  # hard-coded in TissueMAPS
 
@@ -90,6 +90,7 @@ def tissuemaps_interface(url, token, experiment_id, channel_layer_id):
              otherwise a numpy array with the high-resolution image
     """
     class LazyTiledTMArray(LazyArray):
+        # pylint: disable=R0903
         """
         A numpy-like array which lazily loads tiles from a TissueMAPS server.
         """
@@ -99,6 +100,12 @@ def tissuemaps_interface(url, token, experiment_id, channel_layer_id):
 
         @dask.delayed
         def read_tile(self, y_tile, x_tile):
+            '''
+            Reads a tile from a TissuMAPS server
+            :param y_tile: the y coordinate of the tile
+            :param x_tile: the x coordinate of the tile
+            :return: numpy array with the the cooresponding tile updated
+            '''
             api_url = (
                 'api/experiments/' + str(experiment_id) + '/channel_layers/' +
                 str(channel_layer_id) + '/tiles'
