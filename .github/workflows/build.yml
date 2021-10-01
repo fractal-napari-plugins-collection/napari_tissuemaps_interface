@@ -19,7 +19,7 @@ jobs:
         apt install -y fontconfig libgles2-mesa libgles2-mesa-dev
         add-apt-repository ppa:deadsnakes/ppa
         apt update
-        apt install -y python${{ matrix.python-version }} python${{ matrix.python-version }}-dev python3-pip
+        apt install -y python${{ matrix.python-version }} python${{ matrix.python-version }}-dev python3-pip git libgles2-mesa libgles2-mesa-dev
         python${{ matrix.python-version }} -m pip install pip setuptools wheel --upgrade
         if [ ! -e /usr/bin/python ]; then ln -sf python${{ matrix.python-version }} /usr/bin/python ; fi
         if [ ! -e /usr/bin/pip ]; then ln -s /usr/local/bin/pip${{ matrix.python-version }} /usr/bin/pip ; fi
@@ -33,6 +33,7 @@ jobs:
         pycodestyle --max-line-length=120 src
     - name: Run tests
       run: |
+        export QT_QPA_PLATFORM=offscreen
         coverage run --source=src ./setup.py test
         # stop the build if the test coverage is under 80%
         # coverage report --fail-under=80

@@ -1,5 +1,5 @@
-TissueMAPS interface
---------------------------
+TissueMAPS Interface
+-----------------------------------------
 
 This plugin provides the interface to load and visualize data from a TissueMAPS server.
 Data is streamed from server, loading only the minimal amount of data needed for the visualization

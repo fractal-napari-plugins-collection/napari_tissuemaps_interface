@@ -1,7 +1,8 @@
 from setuptools import setup, find_packages
 
+
 setup(
-    name='fractal-napari-plugins:TissueMAPS interface',
+    name='fractal-napari-plugins-colletion:tissuemaps_interface',
     version='1.1.0',
     author='Dario Vischi, Marco Franzon, Giuseppe Piero Brandino',
     author_email='dario.vischi@fmi.ch, marco.franzon@exact-lab.it, giuseppe.brandino@exact-lab.it',
